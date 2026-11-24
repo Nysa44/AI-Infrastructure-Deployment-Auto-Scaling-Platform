@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: inference-config
+  namespace: ai-platform
+data:
+  REDIS_URL: redis://redis:6379/0
+  REDIS_STREAM: inference:jobs
+  REDIS_GROUP: inference-workers
+  MAX_RETRIES: "3"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: inference-secret
+  namespace: ai-platform
+type: Opaque
+stringData:
+  DEMO_SECRET: replace-this-local-demo-value

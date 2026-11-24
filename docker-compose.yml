@@ -1,0 +1,59 @@
+services:
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes: [redis_data:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+  api:
+    build: .
+    image: ai-inference-platform:1.0.0
+    command: ["uvicorn", "app.api:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      REDIS_STREAM: ${REDIS_STREAM:-inference:jobs}
+      REDIS_GROUP: ${REDIS_GROUP:-inference-workers}
+    ports: ["8000:8000"]
+    depends_on:
+      redis: {condition: service_healthy}
+    restart: unless-stopped
+  worker:
+    image: ai-inference-platform:1.0.0
+    command: ["python", "-m", "app.worker"]
+    environment:
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      REDIS_STREAM: ${REDIS_STREAM:-inference:jobs}
+      REDIS_GROUP: ${REDIS_GROUP:-inference-workers}
+      REDIS_CONSUMER: worker-compose
+      MAX_RETRIES: ${MAX_RETRIES:-3}
+    depends_on:
+      redis: {condition: service_healthy}
+    restart: unless-stopped
+  prometheus:
+    image: prom/prometheus:v3.3.0
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus"]
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    ports: ["9090:9090"]
+    depends_on: [api, worker]
+  grafana:
+    image: grafana/grafana:11.6.0
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./observability/grafana-provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana-dashboard.json:/var/lib/grafana/dashboards/ai-inference.json:ro
+    ports: ["3000:3000"]
+    depends_on: [prometheus]
+volumes:
+  redis_data:
+  prometheus_data:
+  grafana_data:

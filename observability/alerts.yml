@@ -1,0 +1,18 @@
+groups:
+  - name: inference-platform
+    rules:
+      - alert: InferenceQueueDepthHigh
+        expr: inference_queue_depth > 100
+        for: 2m
+        labels: {severity: warning}
+        annotations: {summary: "Inference queue depth above 100"}
+      - alert: InferenceDeadLetterMessages
+        expr: increase(inference_dead_letter_total[5m]) > 0
+        for: 1m
+        labels: {severity: critical}
+        annotations: {summary: "Messages are reaching the dead-letter stream"}
+      - alert: InferenceApiDown
+        expr: up{job="inference-api"} == 0
+        for: 1m
+        labels: {severity: critical}
+        annotations: {summary: "Inference API scrape target is unavailable"}
